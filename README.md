@@ -53,6 +53,34 @@ pip install PyQt5
 python main.py
 ```
 
+## 打包成可执行文件（含 PyQt5）
+
+用 [PyInstaller](https://pyinstaller.org/) 把 Python 解释器、PyQt5/Qt 库和本工具打成**一个文件**。对方机器不必再装 Python / PyQt5，但仍需已安装 [Tailscale](https://tailscale.com/download)。
+
+```bash
+# Linux（在本机构建，产物只能在同类 Linux/glibc 上跑）
+sudo apt install python3-pyqt5   # 若尚未安装
+python3 -m pip install --user 'pyinstaller>=6.0'
+./scripts/build.sh
+# 产物: dist/tsctl
+./dist/tsctl
+```
+
+```bat
+REM Windows（必须在 Windows 上打包；Linux 产物不能给 Windows 用）
+pip install PyQt5 pyinstaller
+pyinstaller --noconfirm --clean tsctl.spec
+REM 产物: dist\tsctl.exe
+```
+
+要点：
+
+- **同平台构建**：Linux 打 Linux，Windows 打 Windows；不要指望交叉编译。
+- **单文件**：`tsctl.spec` 使用 one-file，启动时会解压到临时目录，首次会稍慢。
+- **体积**：通常几十 MB（主要是 Qt）；可用 `strip`/`UPX` 再压，但兼容性风险更大，默认关闭。
+- **发行范围**：在较老的发行版上构建，产物更容易在新系统上跑（glibc 向前兼容）；在 Ubuntu 22.04 上构建的二进制，在 18.04 上常会因 glibc 过新而失败。
+- **不打包 Tailscale 本体**：只管理本机已安装的 `tailscale` / `tailscaled`。
+
 ## 架构
 
 分四层：界面只负责渲染和上报意图，控制层持有唯一状态，系统交互层在后台线程里跑所有可能阻塞的命令，基础设施层统一平台判断与 `subprocess` 调用。
@@ -160,7 +188,10 @@ sequenceDiagram
 
 ```text
 main.py           # 入口（支持 --minimized）
+tsctl.spec        # PyInstaller 单文件打包配置
+scripts/build.sh  # Linux 一键打包
 tsctl/
+  runtime.py      # 源码运行 / 冻结二进制的路径适配
   controller.py   # 状态、后台任务和生命周期
   models.py       # AppState / StatusSnapshot / Peer
   workers.py      # 通用后台任务
@@ -178,10 +209,11 @@ tsctl/
     settings_panel.py
     tray.py
   gui.py          # 旧导入路径兼容层
-icons/            # 启动时生成的图标缓存（不入库）
 tests/            # unittest 核心测试
 requirements.txt
 ```
+
+图标缓存写在 `~/.local/share/tsctl/icons/tsctl.png`（Windows: `%LOCALAPPDATA%\tsctl\icons\`），源码运行与打包运行一致，安装目录始终只读。
 
 ## 测试
 

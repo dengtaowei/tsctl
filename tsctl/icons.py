@@ -6,16 +6,16 @@ import os
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 
-
-def project_root():
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.abspath(os.path.join(here, ".."))
+from tsctl import runtime
 
 
 def icon_png_path():
-    """Cached PNG used by window chrome and .desktop Icon=."""
-    d = os.path.join(project_root(), "icons")
-    return os.path.join(d, "tsctl.png")
+    """Cached PNG used by window chrome and .desktop Icon=.
+
+    Always under the user data dir: the install dir may be read-only, and a
+    frozen build would otherwise write next to the binary.
+    """
+    return os.path.join(runtime.writable_data_dir(), "icons", "tsctl.png")
 
 
 def make_app_icon():

@@ -32,7 +32,7 @@ def main():
 
     icon = appicons.load_app_icon()
     app.setWindowIcon(icon)
-    autostart.ensure_launcher(appicons.ensure_icon_png())
+    autostart.refresh_entries(appicons.ensure_icon_png())
 
     app.setQuitOnLastWindowClosed(False)
     controller = AppController(app)

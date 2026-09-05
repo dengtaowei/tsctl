@@ -3,21 +3,13 @@
 from __future__ import print_function
 
 import os
-import sys
 
 from tsctl import platform as app_platform
-
-
-def project_root():
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+from tsctl import runtime
 
 
 def main_py_path():
-    return os.path.join(project_root(), "main.py")
-
-
-def python_executable():
-    return os.path.abspath(sys.executable)
+    return os.path.join(runtime.project_root(), "main.py")
 
 
 def linux_autostart_path():
@@ -72,13 +64,44 @@ def _write(path, content):
         stream.write(content)
 
 
+def _autostart_body(icon_path):
+    return desktop_entry(
+        runtime.launch_exec_line(["--minimized"]), icon_path, autostart=True
+    )
+
+
+def _windows_startup_body():
+    quoted = " ".join(
+        '"%s"' % part for part in runtime.launch_command(["--minimized"])
+    )
+    return '@echo off\r\nstart "" %s\r\n' % quoted
+
+
+def _launcher_body(icon_path):
+    return desktop_entry(runtime.launch_exec_line(), icon_path)
+
+
 def ensure_launcher(icon_path):
     """Install/update the Linux application launcher."""
     if not app_platform.IS_LINUX:
         return
-    path = linux_launcher_path()
-    exec_line = "%s %s" % (python_executable(), main_py_path())
-    _write(path, desktop_entry(exec_line, icon_path))
+    _write(linux_launcher_path(), _launcher_body(icon_path))
+
+
+def refresh_entries(icon_path):
+    """Re-point launcher and any enabled autostart entry at this build.
+
+    Called on every startup: moving the project or swapping a source run for a
+    frozen binary would otherwise leave ``Exec=`` on a path that no longer
+    exists.
+    """
+    if app_platform.IS_LINUX:
+        ensure_launcher(icon_path)
+        if is_enabled():
+            _write(linux_autostart_path(), _autostart_body(icon_path))
+        return
+    if app_platform.IS_WINDOWS and is_enabled():
+        _write(windows_startup_path(), _windows_startup_body())
 
 
 def is_enabled():
@@ -91,15 +114,14 @@ def is_enabled():
 
 def set_enabled(enabled, icon_path=""):
     """Enable/disable login autostart. Return ``(ok, message)``."""
-    main_py = main_py_path()
-    if not os.path.isfile(main_py):
-        return False, "找不到 main.py: %s" % main_py
+    # A frozen build launches the binary itself, which is always present.
+    if not runtime.is_frozen() and not os.path.isfile(main_py_path()):
+        return False, "找不到 main.py: %s" % main_py_path()
 
     if app_platform.IS_LINUX:
         path = linux_autostart_path()
         if enabled:
-            exec_line = "%s %s --minimized" % (python_executable(), main_py)
-            _write(path, desktop_entry(exec_line, icon_path, autostart=True))
+            _write(path, _autostart_body(icon_path))
             ensure_launcher(icon_path)
             return True, "已写入 %s" % path
         if os.path.isfile(path):
@@ -109,11 +131,7 @@ def set_enabled(enabled, icon_path=""):
     if app_platform.IS_WINDOWS:
         path = windows_startup_path()
         if enabled:
-            line = '@echo off\r\nstart "" "%s" "%s" --minimized\r\n' % (
-                python_executable(),
-                main_py,
-            )
-            _write(path, line)
+            _write(path, _windows_startup_body())
             return True, "已写入 %s" % path
         if os.path.isfile(path):
             os.remove(path)
